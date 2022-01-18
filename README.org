@@ -1,1 +1,134 @@
-# how-to-private-docker-registry
+How-To-Private-Docker-Registry
+
+All the commands are for Ubuntu 20.
+
+
+Uninstall old version of docker
+#+begin_src sh
+ sudo apt-get remove docker docker-engine docker.io containerd runc
+#+end_src
+
+Set up the repository
+#+begin_src sh
+sudo apt-get update
+sudo apt-get install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+#+end_src
+
+
+Add Docker’s official GPG key
+#+begin_src sh
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+#+end_src
+
+set up the stable repository
+#+begin_src sh
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+#+end_src
+
+
+Install Docker Engine
+#+begin_src sh
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
+#+end_src
+
+
+Ensure that your version of snapd is up to date 
+#+begin_src sh
+sudo snap install core; sudo snap refresh core
+#+end_src
+
+
+Remove certbot-auto and any Certbot OS packages
+#+begin_src sh
+sudo apt-get remove certbot
+#+end_src
+
+Install Certbot
+#+begin_src sh
+sudo snap install --classic certbot
+#+end_src
+
+
+Prepare the Certbot command
+#+begin_src sh
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+#+end_src
+
+
+Run Certbot 
+#+begin_src sh
+sudo certbot certonly --standalone
+#+end_src
+
+Follow Certbot instructions.
+
+
+Enable and Start docker service
+#+begin_src sh
+sudo systemctl enable docker
+sudo systemctl start docker
+#+end_src
+
+
+Create a password file with one entry for the user =testuser=, with password =testpassword=:
+#+begin_src sh
+mkdir auth
+
+docker run \
+       --entrypoint htpasswd \
+       httpd:2 -Bbn testuser testpassword > auth/htpasswd
+#+end_src
+
+
+Copy letsencrypt files
+#+begin_src sh
+mkdir certs
+sudo cp /etc/letsencrypt/live/<YOUR_DOMAIN>/fullchain.pem certs/
+sudo cp /etc/letsencrypt/live/<YOUR_DOMAIN>/privkey.pem certs/
+#+end_src
+
+
+Start registry
+#+begin_src sh
+sudo docker run -d \
+           --restart=always \
+             --name registry \
+               -v "$(pwd)"/certs:/certs \
+               -v "$(pwd)"/auth:/auth \
+               -e "REGISTRY_AUTH=htpasswd" \
+               -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+               -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd \
+               -e REGISTRY_HTTP_ADDR=0.0.0.0:443 \
+               -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/fullchain.pem \
+               -e REGISTRY_HTTP_TLS_KEY=/certs/privkey.pem \
+               -p 443:443 \
+               registry:2
+#+end_src
+
+
+Check container is running 
+#+begin_src sh
+sudo docker ps 
+#+end_src
+
+Check logs
+#+begin_src 
+sudo docker logs -f registry
+#+end_src
+
+
+
+Login to you registry form a client
+#+begin_src sh
+docker login <YOUR_DOMAIN>
+#+end_src
+
+use credentials created above.
